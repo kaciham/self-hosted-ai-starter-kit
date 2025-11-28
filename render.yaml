@@ -1,0 +1,84 @@
+# render.yaml pour self-hosted-ai-starter-kit
+# Déploie n8n + PostgreSQL + Qdrant sur Render
+# Note: Ollama n'est pas inclus car il nécessite un GPU
+# Utilise une API LLM externe (OpenAI, Anthropic, etc.) à la place
+
+services:
+  # ===================
+  # n8n - Workflow Automation
+  # ===================
+  - type: web
+    name: n8n
+    runtime: image
+    image:
+      url: docker.n8n.io/n8nio/n8n:latest
+    plan: starter
+    autoDeploy: false
+    healthCheckPath: /healthz
+    envVars:
+      # Database configuration
+      - key: DB_TYPE
+        value: postgresdb
+      - key: DB_POSTGRESDB_DATABASE
+        fromDatabase:
+          name: n8n-postgres
+          property: database
+      - key: DB_POSTGRESDB_HOST
+        fromDatabase:
+          name: n8n-postgres
+          property: host
+      - key: DB_POSTGRESDB_PORT
+        fromDatabase:
+          name: n8n-postgres
+          property: port
+      - key: DB_POSTGRESDB_USER
+        fromDatabase:
+          name: n8n-postgres
+          property: user
+      - key: DB_POSTGRESDB_PASSWORD
+        fromDatabase:
+          name: n8n-postgres
+          property: password
+      # n8n configuration
+      - key: N8N_ENCRYPTION_KEY
+        generateValue: true
+      - key: WEBHOOK_URL
+        fromService:
+          type: web
+          name: n8n
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: GENERIC_TIMEZONE
+        value: Europe/Paris
+      # Qdrant connection (internal network)
+      - key: QDRANT_URL
+        fromService:
+          type: pserv
+          name: qdrant
+          property: hostport
+    disk:
+      name: n8n-data
+      mountPath: /home/node/.n8n
+      sizeGB: 1
+
+  # ===================
+  # Qdrant - Vector Database
+  # ===================
+  - type: pserv
+    name: qdrant
+    runtime: image
+    image:
+      url: qdrant/qdrant:latest
+    plan: starter
+    autoDeploy: false
+    disk:
+      name: qdrant-data
+      mountPath: /qdrant/storage
+      sizeGB: 1
+
+# ===================
+# PostgreSQL Database
+# ===================
+databases:
+  - name: n8n-postgres
+    plan: free
+    databaseName: n8n
